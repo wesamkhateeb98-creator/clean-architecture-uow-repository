@@ -1,4 +1,4 @@
-using Shop.Application.Interfaces;
+using Shop.Application.Abstract.Repositories;
 using Shop.Infrastructure.Repositories;
 
 namespace Shop.Infrastructure.Persistence;

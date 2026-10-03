@@ -19,7 +19,7 @@ The key: **all repositories share the same `DbContext`**, so one `SaveChangesAsy
 
 ## Example
 
-**Contract** (`Shop.Application/Interfaces/IUnitOfWork.cs`):
+**Contract** (`Shop.Application/Abstract/Repositories/IUnitOfWork.cs`):
 ```csharp
 public interface IUnitOfWork
 {

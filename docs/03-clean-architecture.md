@@ -11,7 +11,7 @@ flowchart TB
         Infra["Shop.Infrastructure<br/>EF Core, PostgreSQL, Repositories, UnitOfWork"]
     end
     subgraph Core["Core (business)"]
-        App["Shop.Application<br/>Services, DTOs, Interfaces"]
+        App["Shop.Application<br/>Abstract (interfaces), Services, DTOs"]
         Dom["Shop.Domain<br/>Entities"]
     end
     Api --> App
@@ -22,7 +22,7 @@ flowchart TB
 | Layer | Contains | References |
 |---|---|---|
 | `Shop.Domain` | `Product`, `Category` | nothing |
-| `Shop.Application` | `ProductService`, `IUnitOfWork`, `IProductRepository`, DTOs | Domain |
+| `Shop.Application` | `Abstract/Repositories` (`IUnitOfWork`, `IProductRepository`), `Abstract/Services` (`IProductService`), `ProductService`, DTOs | Domain |
 | `Shop.Infrastructure` | `AppDbContext`, `ProductRepository`, `UnitOfWork` | Application |
 | `Shop.Api` | `ProductsController`, `ErrorHandlingMiddleware` | Application + Infrastructure (DI only) |
 
@@ -46,11 +46,24 @@ classDiagram
     note for UnitOfWork "Shop.Infrastructure"
 ```
 
+### Two kinds of abstractions in Application
+```mermaid
+flowchart LR
+    Ctrl["ProductsController<br/>(Api)"] -->|uses| IPS["IProductService<br/>Abstract/Services"]
+    PS["ProductService<br/>Services/"] -. implements .-> IPS
+    PS -->|uses| IUoW["IUnitOfWork<br/>Abstract/Repositories"]
+    UoW["UnitOfWork<br/>(Infrastructure)"] -. implements .-> IUoW
+```
+| Folder | Contains | Implemented by | Used by |
+|---|---|---|---|
+| `Abstract/Repositories` | `IRepository<T>`, `IProductRepository`, `ICategoryRepository`, `IUnitOfWork` | Infrastructure | Application services |
+| `Abstract/Services` | `IProductService`, `ICategoryService` | Application `Services/` | Api controllers |
+
 ## Example
 
 `Shop.Application/Services/ProductService.cs`: no `using Microsoft.EntityFrameworkCore`, no `Npgsql`:
 ```csharp
-public class ProductService(IUnitOfWork unitOfWork)
+public class ProductService(IUnitOfWork unitOfWork) : IProductService
 {
     public async Task<int> CreateAsync(CreateProductRequest request, CancellationToken ct)
     {

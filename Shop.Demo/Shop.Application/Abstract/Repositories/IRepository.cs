@@ -1,4 +1,4 @@
-namespace Shop.Application.Interfaces;
+namespace Shop.Application.Abstract.Repositories;
 
 // Generic repository: the operations every entity shares.
 // Note: there is no SaveChanges here -- saving belongs to the Unit of Work.

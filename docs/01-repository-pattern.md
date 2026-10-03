@@ -46,7 +46,7 @@ classDiagram
 
 ## Example
 
-**Contract** (`Shop.Application/Interfaces/IRepository.cs`):
+**Contract** (`Shop.Application/Abstract/Repositories/IRepository.cs`):
 ```csharp
 public interface IRepository<T> where T : class
 {
@@ -58,7 +58,7 @@ public interface IRepository<T> where T : class
 }
 ```
 
-**Specific contracts** (`Shop.Application/Interfaces/`):
+**Specific contracts** (`Shop.Application/Abstract/Repositories/`):
 ```csharp
 public interface IProductRepository : IRepository<Product>
 {

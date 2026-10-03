@@ -9,7 +9,7 @@ sequenceDiagram
     participant Client
     participant MW as ErrorHandlingMiddleware<br/>(Api)
     participant Ctrl as ProductsController<br/>(Api)
-    participant Svc as ProductService<br/>(Application)
+    participant Svc as IProductService → ProductService<br/>(Application)
     participant UoW as UnitOfWork<br/>(Infrastructure)
     participant Repo as Category/ProductRepository<br/>(Infrastructure)
     participant DB as PostgreSQL
@@ -35,7 +35,7 @@ sequenceDiagram
 | Piece | Pattern | Responsibility |
 |---|---|---|
 | `Product`, `Category` | Clean Architecture: **Domain** | Pure data + rules, no dependencies |
-| `ProductService` | Clean Architecture: **Application** | Business flow: validate, create, decide |
+| `IProductService` → `ProductService` | Clean Architecture: **Application** | Business flow: validate, create, decide |
 | `IProductRepository` → `ProductRepository` | **Repository** | *How* to read/stage one entity type |
 | `IUnitOfWork` → `UnitOfWork` | **Unit of Work** | Group repositories + commit once |
 | `AppDbContext` | Infrastructure | EF Core ↔ PostgreSQL mapping |
@@ -56,7 +56,9 @@ Application throws **its own** exceptions, with no knowledge of HTTP. The Api ma
 Shop.Demo/
 ├── Shop.Domain/Entities/               Product.cs, Category.cs
 ├── Shop.Application/
-│   ├── Interfaces/                     IRepository, IProductRepository, ICategoryRepository, IUnitOfWork
+│   ├── Abstract/
+│   │   ├── Repositories/               IRepository, IProductRepository, ICategoryRepository, IUnitOfWork
+│   │   └── Services/                   IProductService, ICategoryService
 │   ├── Services/                       ProductService, CategoryService
 │   ├── DTOs/                           ProductDtos, CategoryDtos
 │   ├── Exceptions/                     NotFoundException, BadRequestException

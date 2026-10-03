@@ -1,11 +1,12 @@
 using Shop.Application.DTOs;
 using Shop.Application.Exceptions;
-using Shop.Application.Interfaces;
+using Shop.Application.Abstract.Repositories;
+using Shop.Application.Abstract.Services;
 using Shop.Domain.Entities;
 
 namespace Shop.Application.Services;
 
-public class CategoryService(IUnitOfWork unitOfWork)
+public class CategoryService(IUnitOfWork unitOfWork) : ICategoryService
 {
     public async Task<List<CategoryDto>> GetAllAsync(CancellationToken ct)
     {

@@ -1,4 +1,4 @@
-namespace Shop.Application.Interfaces;
+namespace Shop.Application.Abstract.Repositories;
 
 // Unit of Work: one entry point to every repository + ONE commit for all their changes.
 public interface IUnitOfWork

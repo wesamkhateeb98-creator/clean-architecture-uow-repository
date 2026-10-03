@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Shop.Application.Exceptions;
-using Shop.Application.Interfaces;
+using Shop.Application.Abstract.Repositories;
 using Shop.Domain.Entities;
 using Shop.Infrastructure.Persistence;
 

@@ -1,12 +1,13 @@
 using Shop.Application.DTOs;
 using Shop.Application.Exceptions;
-using Shop.Application.Interfaces;
+using Shop.Application.Abstract.Repositories;
+using Shop.Application.Abstract.Services;
 using Shop.Domain.Entities;
 
 namespace Shop.Application.Services;
 
 // Depends only on IUnitOfWork (an interface) -- it has no idea EF Core or PostgreSQL exist.
-public class ProductService(IUnitOfWork unitOfWork)
+public class ProductService(IUnitOfWork unitOfWork) : IProductService
 {
     public async Task<List<ProductDto>> GetAllAsync(CancellationToken ct)
     {

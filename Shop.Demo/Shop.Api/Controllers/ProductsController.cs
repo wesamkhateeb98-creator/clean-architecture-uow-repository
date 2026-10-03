@@ -1,13 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Shop.Application.DTOs;
-using Shop.Application.Services;
+using Shop.Application.Abstract.Services;
 
 namespace Shop.Api.Controllers;
 
 // Thin controller: HTTP in -> service -> HTTP out. No business logic, no DbContext.
 [ApiController]
 [Route("api/products")]
-public class ProductsController(ProductService productService) : ControllerBase
+public class ProductsController(IProductService productService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<ProductDto>>> GetAll(CancellationToken ct) =>

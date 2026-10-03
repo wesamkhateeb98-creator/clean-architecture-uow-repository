@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using Shop.Application.DTOs;
-using Shop.Application.Services;
+using Shop.Application.Abstract.Services;
 
 namespace Shop.Api.Controllers;
 
 [ApiController]
 [Route("api/categories")]
-public class CategoriesController(CategoryService categoryService) : ControllerBase
+public class CategoriesController(ICategoryService categoryService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<List<CategoryDto>>> GetAll(CancellationToken ct) =>
