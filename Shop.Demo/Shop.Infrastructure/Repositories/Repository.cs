@@ -1,24 +1,25 @@
 using Microsoft.EntityFrameworkCore;
-using Shop.Application.Abstract.Repositories;
+using Shop.Application.Abstracts;
+using Shop.Domain.Entities;
 using Shop.Infrastructure.Persistence;
 
 namespace Shop.Infrastructure.Repositories;
 
 // Generic implementation shared by all repositories.
 // It only stages changes in the DbContext -- the Unit of Work commits them.
-public class Repository<T>(AppDbContext context) : IRepository<T> where T : class
+public class Repository<T>(AppDbContext dbContext) : IRepository<T> where T : IEntity
 {
-    protected readonly AppDbContext Context = context;
+    protected readonly AppDbContext DbContext = dbContext;
 
-    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default) =>
-        await Context.Set<T>().FindAsync([id], ct);
+    public async Task AddAsync(T entity, CancellationToken cancellationToken)
+        => await DbContext.Set<T>().AddAsync(entity, cancellationToken);
 
-    public Task<List<T>> GetAllAsync(CancellationToken ct = default) =>
-        Context.Set<T>().AsNoTracking().ToListAsync(ct);
+    public void Delete(T entity, CancellationToken cancellationToken)
+        => DbContext.Set<T>().Remove(entity);
 
-    public async Task AddAsync(T entity, CancellationToken ct = default) =>
-        await Context.Set<T>().AddAsync(entity, ct);
+    public Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken)
+        => DbContext.Set<T>().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-    public void Remove(T entity) =>
-        Context.Set<T>().Remove(entity);
+    public Task<bool> ExistsByIdAsync(int id, CancellationToken cancellationToken)
+        => DbContext.Set<T>().AnyAsync(x => x.Id == id, cancellationToken);
 }

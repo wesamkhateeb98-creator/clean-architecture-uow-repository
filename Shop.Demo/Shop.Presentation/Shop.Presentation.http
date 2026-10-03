@@ -1,0 +1,51 @@
+@baseUrl = http://localhost:5153
+
+### ---------- Categories ----------
+
+GET {{baseUrl}}/api/v1.0/categories
+
+###
+GET {{baseUrl}}/api/v1.0/categories/1
+
+###
+POST {{baseUrl}}/api/v1.0/categories
+Content-Type: application/json
+
+{ "name": "Games" }
+
+###
+PUT {{baseUrl}}/api/v1.0/categories/2
+Content-Type: application/json
+
+{ "name": "Books & Magazines" }
+
+### 400 Failed Precondition: category 1 still has products
+DELETE {{baseUrl}}/api/v1.0/categories/1
+
+### Unit of Work demo: move products of 1 -> 2 AND delete 1, in ONE transaction
+DELETE {{baseUrl}}/api/v1.0/categories/1?moveTo=2
+
+### ---------- Products ----------
+
+GET {{baseUrl}}/api/v1.0/products
+
+###
+GET {{baseUrl}}/api/v1.0/products/1
+
+###
+POST {{baseUrl}}/api/v1.0/products
+Content-Type: application/json
+
+{ "name": "Keyboard", "price": 49.99, "stock": 100, "categoryId": 1 }
+
+###
+PUT {{baseUrl}}/api/v1.0/products/1
+Content-Type: application/json
+
+{ "name": "Laptop Pro", "price": 1500, "stock": 8, "categoryId": 1 }
+
+###
+DELETE {{baseUrl}}/api/v1.0/products/3
+
+### 404
+GET {{baseUrl}}/api/v1.0/products/999

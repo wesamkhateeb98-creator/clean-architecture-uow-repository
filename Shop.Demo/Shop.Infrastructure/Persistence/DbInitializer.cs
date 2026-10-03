@@ -14,17 +14,19 @@ public static class DbInitializer
 
         await context.Database.EnsureCreatedAsync();
 
-        if (await context.Categories.AnyAsync())
+        var hasData = await context.Set<Category>().AnyAsync();
+        if (hasData)
             return;
 
-        var electronics = new Category { Name = "Electronics" };
-        var books = new Category { Name = "Books" };
+        var electronics = Category.Create("Electronics");
+        var books = Category.Create("Books");
+        context.AddRange(electronics, books);
+        await context.SaveChangesAsync();
 
-        context.Products.AddRange(
-            new Product { Name = "Laptop", Price = 1200m, Stock = 10, Category = electronics },
-            new Product { Name = "Phone", Price = 800m, Stock = 25, Category = electronics },
-            new Product { Name = "Clean Architecture (book)", Price = 35m, Stock = 50, Category = books });
-
+        context.AddRange(
+            Product.Create("Laptop", 1200m, 10, electronics.Id),
+            Product.Create("Phone", 800m, 25, electronics.Id),
+            Product.Create("Clean Architecture (book)", 35m, 50, books.Id));
         await context.SaveChangesAsync();
     }
 }

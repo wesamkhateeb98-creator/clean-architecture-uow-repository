@@ -1,70 +1,59 @@
-using Shop.Application.DTOs;
-using Shop.Application.Exceptions;
-using Shop.Application.Abstract.Repositories;
-using Shop.Application.Abstract.Services;
+using Shop.Application.Abstracts;
+using Shop.Application.Abstracts.Services;
+using Shop.Application.Extensions;
+using Shop.Application.Models;
 using Shop.Domain.Entities;
+using Shop.Domain.Exceptions;
 
 namespace Shop.Application.Services;
 
 // Depends only on IUnitOfWork (an interface) -- it has no idea EF Core or PostgreSQL exist.
 public class ProductService(IUnitOfWork unitOfWork) : IProductService
 {
-    public async Task<List<ProductDto>> GetAllAsync(CancellationToken ct)
+    public async Task<List<ProductModel>> GetAllAsync(CancellationToken cancellationToken)
     {
-        var products = await unitOfWork.Products.GetAllWithCategoryAsync(ct);
-        return products.Select(ToDto).ToList();
+        var products = await unitOfWork.Products.GetAllWithCategoryAsync(cancellationToken);
+        return products.Select(p => p.ToModel()).ToList();
     }
 
-    public async Task<ProductDto> GetByIdAsync(int id, CancellationToken ct)
+    public async Task<ProductModel> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
-        var product = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct)
+        var product = await unitOfWork.Products.GetByIdWithCategoryAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Product {id} not found.");
 
-        return ToDto(product);
+        return product.ToModel();
     }
 
-    public async Task<int> CreateAsync(CreateProductRequest request, CancellationToken ct)
+    public async Task<int> AddAsync(AddProductModel model, CancellationToken cancellationToken)
     {
-        await unitOfWork.Categories.EnsureExistsAsync(request.CategoryId, ct);
+        await unitOfWork.Categories.EnsureExistsAsync(model.CategoryId, cancellationToken);
 
-        var product = new Product
-        {
-            Name = request.Name,
-            Price = request.Price,
-            Stock = request.Stock,
-            CategoryId = request.CategoryId
-        };
+        var product = Product.Create(model.Name, model.Price, model.Stock, model.CategoryId);
 
-        await unitOfWork.Products.AddAsync(product, ct);
-        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.Products.AddAsync(product, cancellationToken);
+        await unitOfWork.CompleteAsync(cancellationToken);
 
         return product.Id;
     }
 
-    public async Task UpdateAsync(int id, UpdateProductRequest request, CancellationToken ct)
+    public async Task UpdateAsync(UpdateProductModel model, CancellationToken cancellationToken)
     {
-        var product = await unitOfWork.Products.GetByIdAsync(id, ct)
-            ?? throw new NotFoundException($"Product {id} not found.");
+        var product = await unitOfWork.Products.GetByIdAsync(model.Id, cancellationToken)
+            ?? throw new NotFoundException($"Product {model.Id} not found.");
 
-        await unitOfWork.Categories.EnsureExistsAsync(request.CategoryId, ct);
+        await unitOfWork.Categories.EnsureExistsAsync(model.CategoryId, cancellationToken);
 
-        product.Name = request.Name;
-        product.Price = request.Price;
-        product.Stock = request.Stock;
-        product.CategoryId = request.CategoryId;
+        product.Update(model.Name, model.Price, model.Stock, model.CategoryId);
 
-        await unitOfWork.SaveChangesAsync(ct);
+        await unitOfWork.CompleteAsync(cancellationToken);
     }
 
-    public async Task DeleteAsync(int id, CancellationToken ct)
+    public async Task DeleteAsync(int id, CancellationToken cancellationToken)
     {
-        var product = await unitOfWork.Products.GetByIdAsync(id, ct)
+        var product = await unitOfWork.Products.GetByIdAsync(id, cancellationToken)
             ?? throw new NotFoundException($"Product {id} not found.");
 
-        unitOfWork.Products.Remove(product);
-        await unitOfWork.SaveChangesAsync(ct);
+        unitOfWork.Products.Delete(product, cancellationToken);
+        await unitOfWork.CompleteAsync(cancellationToken);
     }
-
-    private static ProductDto ToDto(Product p) =>
-        new(p.Id, p.Name, p.Price, p.Stock, p.CategoryId, p.Category?.Name ?? string.Empty);
 }

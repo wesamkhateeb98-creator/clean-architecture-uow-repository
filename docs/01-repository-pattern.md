@@ -1,7 +1,7 @@
 # 1. Repository Pattern
 
 ## Definition
-A **repository** acts like an **in-memory collection of entities** (`Add`, `Remove`, `GetById`) and hides *how* data is stored.
+A **repository** acts like an **in-memory collection of entities** (`Add`, `Delete`, `GetById`) and hides *how* data is stored.
 Services talk to `IProductRepository`, never to `DbContext` or SQL.
 
 ```mermaid
@@ -14,12 +14,15 @@ flowchart LR
 ### Generic + specific
 ```mermaid
 classDiagram
+    class IEntity {
+        Id
+    }
     class IRepository~T~ {
         <<interface>>
-        GetByIdAsync(id)
-        GetAllAsync()
         AddAsync(entity)
-        Remove(entity)
+        Delete(entity)
+        GetByIdAsync(id)
+        ExistsByIdAsync(id)
     }
     class IProductRepository {
         <<interface>>
@@ -29,9 +32,11 @@ classDiagram
     }
     class ICategoryRepository {
         <<interface>>
+        GetAllAsync()
         EnsureExistsAsync(id)
         NameExistsAsync(name)
     }
+    IRepository~T~ ..> IEntity : T must be
     IRepository~T~ <|-- IProductRepository
     IRepository~T~ <|-- ICategoryRepository
     class Repository~T~
@@ -46,32 +51,45 @@ classDiagram
 
 ## Example
 
-**Contract** (`Shop.Application/Abstract/Repositories/IRepository.cs`):
+**Entity base** (`Shop.Domain/Entities/IEntity.cs`): gives every entity an `Id`, so a generic repository can query by it.
 ```csharp
-public interface IRepository<T> where T : class
+public class IEntity
 {
-    Task<T?> GetByIdAsync(int id, CancellationToken ct = default);
-    Task<List<T>> GetAllAsync(CancellationToken ct = default);
-    Task AddAsync(T entity, CancellationToken ct = default);
-    void Remove(T entity);
-    // no SaveChanges here: committing is the Unit of Work's job
+    public int Id { get; set; }
+}
+
+public class Product : IEntity { ... }
+public class Category : IEntity { ... }
+```
+
+**Contract** (`Shop.Application/Abstracts/IRepository.cs`):
+```csharp
+public interface IRepository<T> where T : IEntity
+{
+    Task AddAsync(T entity, CancellationToken cancellationToken);
+    void Delete(T entity, CancellationToken cancellationToken);
+    Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken);
+    Task<bool> ExistsByIdAsync(int id, CancellationToken cancellationToken);
+    // no Save here: committing is the Unit of Work's job
 }
 ```
 
-**Specific contracts** (`Shop.Application/Abstract/Repositories/`):
+**Specific contracts** (`Shop.Application/Abstracts/Repositories/`):
 ```csharp
 public interface IProductRepository : IRepository<Product>
 {
-    Task<List<Product>> GetAllWithCategoryAsync(CancellationToken ct = default);
-    Task<Product?> GetByIdWithCategoryAsync(int id, CancellationToken ct = default);
-    Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken ct = default);
+    Task<List<Product>> GetAllWithCategoryAsync(CancellationToken cancellationToken);
+    Task<Product?> GetByIdWithCategoryAsync(int id, CancellationToken cancellationToken);
+    Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken cancellationToken);
 }
 
 public interface ICategoryRepository : IRepository<Category>
 {
-    // Throws BadRequestException when the category does not exist.
-    Task EnsureExistsAsync(int id, CancellationToken ct = default);
-    Task<bool> NameExistsAsync(string name, CancellationToken ct = default);
+    Task<List<Category>> GetAllAsync(CancellationToken cancellationToken);
+
+    // Throws NotFoundException when the category does not exist.
+    Task EnsureExistsAsync(int id, CancellationToken cancellationToken);
+    Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken);
 }
 ```
 
@@ -87,7 +105,7 @@ flowchart LR
     subgraph Infra["Shop.Infrastructure (EF Core)"]
         R["Repository#60;T#62;<br/>CRUD for every entity"]
         PR["ProductRepository<br/>+ Include / filter queries"]
-        CR["CategoryRepository<br/>+ EnsureExists / NameExists"]
+        CR["CategoryRepository<br/>+ GetAll / EnsureExists / NameExists"]
     end
     R -. implements .-> IR
     PR -- inherits --> R
@@ -99,98 +117,106 @@ flowchart LR
 
 **1. Generic base** (`Shop.Infrastructure/Repositories/Repository.cs`): written once, reused by every entity.
 ```csharp
-public class Repository<T>(AppDbContext context) : IRepository<T> where T : class
+public class Repository<T>(AppDbContext dbContext) : IRepository<T> where T : IEntity
 {
-    protected readonly AppDbContext Context = context;
+    protected readonly AppDbContext DbContext = dbContext;
 
-    // Tracked: the caller may modify it, then the Unit of Work saves it.
-    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default) =>
-        await Context.Set<T>().FindAsync([id], ct);
-
-    // Read-only list: AsNoTracking is faster, with no change tracking.
-    public Task<List<T>> GetAllAsync(CancellationToken ct = default) =>
-        Context.Set<T>().AsNoTracking().ToListAsync(ct);
-
-    // Only stages the INSERT. Nothing is written until SaveChangesAsync.
-    public async Task AddAsync(T entity, CancellationToken ct = default) =>
-        await Context.Set<T>().AddAsync(entity, ct);
+    // Only stages the INSERT. Nothing is written until CompleteAsync.
+    public async Task AddAsync(T entity, CancellationToken cancellationToken)
+        => await DbContext.Set<T>().AddAsync(entity, cancellationToken);
 
     // Only stages the DELETE.
-    public void Remove(T entity) =>
-        Context.Set<T>().Remove(entity);
+    public void Delete(T entity, CancellationToken cancellationToken)
+        => DbContext.Set<T>().Remove(entity);
+
+    // Tracked: the caller may modify it, then the Unit of Work saves it.
+    // x.Id compiles because T : IEntity.
+    public Task<T?> GetByIdAsync(int id, CancellationToken cancellationToken)
+        => DbContext.Set<T>().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+    public Task<bool> ExistsByIdAsync(int id, CancellationToken cancellationToken)
+        => DbContext.Set<T>().AnyAsync(x => x.Id == id, cancellationToken);
 }
 ```
 
 **2. Product repository** (`Shop.Infrastructure/Repositories/ProductRepository.cs`): inherits CRUD and adds product-only queries.
 ```csharp
-public class ProductRepository(AppDbContext context) : Repository<Product>(context), IProductRepository
+public class ProductRepository(AppDbContext dbContext) : Repository<Product>(dbContext), IProductRepository
 {
-    public Task<List<Product>> GetAllWithCategoryAsync(CancellationToken ct = default) =>
-        Context.Products
+    public Task<List<Product>> GetAllWithCategoryAsync(CancellationToken cancellationToken) =>
+        DbContext.Set<Product>()
             .AsNoTracking()
             .Include(p => p.Category)
             .OrderBy(p => p.Id)
-            .ToListAsync(ct);
+            .ToListAsync(cancellationToken);
 
-    public Task<Product?> GetByIdWithCategoryAsync(int id, CancellationToken ct = default) =>
-        Context.Products
+    public Task<Product?> GetByIdWithCategoryAsync(int id, CancellationToken cancellationToken) =>
+        DbContext.Set<Product>()
             .AsNoTracking()
             .Include(p => p.Category)
-            .FirstOrDefaultAsync(p => p.Id == id, ct);
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
     // Tracked on purpose: the caller modifies these products and the Unit of Work saves them.
-    public Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken ct = default) =>
-        Context.Products
+    public Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken cancellationToken) =>
+        DbContext.Set<Product>()
             .Where(p => p.CategoryId == categoryId)
-            .ToListAsync(ct);
+            .ToListAsync(cancellationToken);
 }
 ```
 
 **3. Category repository** (`Shop.Infrastructure/Repositories/CategoryRepository.cs`): inherits CRUD and adds category checks.
 ```csharp
-public class CategoryRepository(AppDbContext context) : Repository<Category>(context), ICategoryRepository
+public class CategoryRepository(AppDbContext dbContext) : Repository<Category>(dbContext), ICategoryRepository
 {
-    public async Task EnsureExistsAsync(int id, CancellationToken ct = default)
+    public Task<List<Category>> GetAllAsync(CancellationToken cancellationToken) =>
+        DbContext.Set<Category>()
+            .AsNoTracking()
+            .OrderBy(c => c.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task EnsureExistsAsync(int id, CancellationToken cancellationToken)
     {
-        if (!await Context.Categories.AnyAsync(c => c.Id == id, ct))
-            throw new BadRequestException($"Category {id} does not exist.");
+        var exists = await ExistsByIdAsync(id, cancellationToken);   // reuses the generic base
+
+        if (!exists)
+            throw new NotFoundException($"Category {id} not found.");
     }
 
-    public Task<bool> NameExistsAsync(string name, CancellationToken ct = default) =>
-        Context.Categories.AnyAsync(c => c.Name == name, ct);
+    public Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken) =>
+        DbContext.Set<Category>().AnyAsync(c => c.Name == name, cancellationToken);
 }
 ```
 
 ### What each method sends to PostgreSQL
 | Call | SQL | Hits the DB |
 |---|---|---|
-| `Products.GetAllWithCategoryAsync()` | `SELECT p.*, c.* FROM "Products" p INNER JOIN "Categories" c … ORDER BY p."Id"` | immediately |
-| `Products.GetByIdAsync(1)` | `SELECT … WHERE "Id" = 1 LIMIT 1` (skipped if already tracked) | immediately |
-| `Categories.EnsureExistsAsync(1)` | `SELECT EXISTS (SELECT 1 FROM "Categories" WHERE "Id" = 1)` | immediately |
-| `Products.AddAsync(p)` | `INSERT INTO "Products" …` | **on `SaveChangesAsync`** |
-| `Categories.Remove(c)` | `DELETE FROM "Categories" WHERE "Id" = …` | **on `SaveChangesAsync`** |
+| `Products.GetAllWithCategoryAsync()` | `SELECT p.*, c.* FROM "Product" p INNER JOIN "Category" c … ORDER BY p."Id"` | immediately |
+| `Products.GetByIdAsync(1)` | `SELECT … FROM "Product" WHERE "Id" = 1 LIMIT 1` | immediately |
+| `Categories.EnsureExistsAsync(1)` | `SELECT EXISTS (SELECT 1 FROM "Category" WHERE "Id" = 1)` | immediately |
+| `Products.AddAsync(p)` | `INSERT INTO "Product" …` | **on `CompleteAsync`** |
+| `Categories.Delete(c)` | `DELETE FROM "Category" WHERE "Id" = …` | **on `CompleteAsync`** |
 
 Reads run right away. Writes are only **staged**, and the [Unit of Work](02-unit-of-work.md) commits them.
 
 ### Where they get created
 Repositories are **not** registered in DI. `UnitOfWork` creates them over its own `DbContext`, so they all share it:
 ```csharp
-public IProductRepository Products => _products ??= new ProductRepository(context);
-public ICategoryRepository Categories => _categories ??= new CategoryRepository(context);
+public IProductRepository Products => _products ??= new ProductRepository(dbContext);
+public ICategoryRepository Categories => _categories ??= new CategoryRepository(dbContext);
 ```
 
 **Usage** (service, with no EF Core in sight):
 ```csharp
-var products = await unitOfWork.Products.GetAllWithCategoryAsync(ct);
+var products = await unitOfWork.Products.GetAllWithCategoryAsync(cancellationToken);
 ```
 
 ### Without vs with
 ```csharp
 // ❌ Without: query logic copy-pasted into every service, tied to EF Core
-var p = await _db.Products.AsNoTracking().Include(x => x.Category).FirstOrDefaultAsync(x => x.Id == id);
+var p = await _db.Set<Product>().AsNoTracking().Include(x => x.Category).FirstOrDefaultAsync(x => x.Id == id);
 
 // ✅ With: one named method, one place to change
-var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct);
+var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, cancellationToken);
 ```
 
 ## Benefits
@@ -198,10 +224,10 @@ var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct);
 |---|---|
 | Queries in one place | `Include(p => p.Category)` is written once, in `ProductRepository`, not in every service. |
 | Readable services | `Categories.NameExistsAsync("Books")` reads like business language. |
-| Reusable checks | `Categories.EnsureExistsAsync(id)` is used by `ProductService` (create/update) and `CategoryService` (delete + move). The rule is written once. |
+| Reusable checks | `Categories.EnsureExistsAsync(id)` is used by `ProductService` (add/update) and `CategoryService` (delete + move). The rule is written once. |
 | Easy to mock | Tests replace `IProductRepository` with an in-memory list. |
 | Storage hidden | Moving products to Dapper or raw SQL changes only `ProductRepository`. |
-| Less duplication | `Repository<T>` gives every entity CRUD for free. `CategoryRepository` adds just 2 methods. |
+| Less duplication | `Repository<T>` gives every `IEntity` its CRUD for free. `CategoryRepository` adds just 3 methods. |
 
 ## Anti-patterns
 
@@ -216,16 +242,16 @@ var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct);
 ### 1. `SaveChanges` inside the repository
 ```csharp
 // ❌ Each repository commits on its own
-public async Task AddAsync(Product p) { Context.Add(p); await Context.SaveChangesAsync(); }
+public async Task AddAsync(Product p) { DbContext.Add(p); await DbContext.SaveChangesAsync(); }
 
 // CategoryService.DeleteAsync:
 await products.UpdateAsync(...);   // COMMIT #1, products moved
-await categories.RemoveAsync(...); // throws → category NOT deleted → DB is half-done
+await categories.DeleteAsync(...); // throws → category NOT deleted → DB is half-done
 ```
 ```csharp
-// ✅ Repository only stages; the Unit of Work commits once
-public async Task AddAsync(T entity, CancellationToken ct = default) =>
-    await Context.Set<T>().AddAsync(entity, ct);
+// ✅ Repository only stages; the Unit of Work commits
+public async Task AddAsync(T entity, CancellationToken cancellationToken)
+    => await DbContext.Set<T>().AddAsync(entity, cancellationToken);
 ```
 
 ### 2. Returning `IQueryable<T>`
@@ -236,17 +262,17 @@ var list = await repo.Query().Include(p => p.Category).Where(p => p.Stock > 0).T
 ```
 ```csharp
 // ✅ A named method; the query stays inside Infrastructure
-Task<List<Product>> GetAllWithCategoryAsync(CancellationToken ct = default);
+Task<List<Product>> GetAllWithCategoryAsync(CancellationToken cancellationToken);
 ```
 
 ### 3. `GetAll()` then filter in memory
 ```csharp
-// ❌ SELECT * FROM "Products", with every row sent over the network
-var products = (await unitOfWork.Products.GetAllAsync(ct)).Where(p => p.CategoryId == id).ToList();
+// ❌ SELECT * FROM "Product", with every row sent over the network
+var products = (await repo.GetAllAsync(cancellationToken)).Where(p => p.CategoryId == id).ToList();
 ```
 ```csharp
 // ✅ SELECT … WHERE "CategoryId" = @id, with filtering done in PostgreSQL
-var products = await unitOfWork.Products.GetByCategoryAsync(id, ct);
+var products = await unitOfWork.Products.GetByCategoryAsync(id, cancellationToken);
 ```
 | Products in table | ❌ rows transferred | ✅ rows transferred |
 |---|---|---|
@@ -256,10 +282,10 @@ var products = await unitOfWork.Products.GetByCategoryAsync(id, ct);
 ### 4. Business rules inside the repository
 ```csharp
 // ❌ "10% discount for Electronics" is a business rule, not data access
-public Task<List<Product>> GetDiscountedAsync() =>
-    Context.Products.Select(p => new Product { Price = p.CategoryId == 1 ? p.Price * 0.9m : p.Price }).ToListAsync();
+public Task<List<ProductModel>> GetDiscountedAsync() =>
+    DbContext.Set<Product>().Select(p => new ProductModel(..., p.CategoryId == 1 ? p.Price * 0.9m : p.Price, ...)).ToListAsync();
 ```
-✅ The repository **fetches**; `ProductService` **decides**. Rules belong in Application or Domain.
+✅ The repository **fetches**; `ProductService` (or the `Product` entity) **decides**. Rules belong in Application or Domain.
 
 ### 5. Repository that just mirrors `DbSet`
 ```csharp

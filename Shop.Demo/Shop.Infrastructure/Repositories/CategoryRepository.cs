@@ -1,19 +1,27 @@
 using Microsoft.EntityFrameworkCore;
-using Shop.Application.Exceptions;
-using Shop.Application.Abstract.Repositories;
+using Shop.Application.Abstracts.Repositories;
 using Shop.Domain.Entities;
+using Shop.Domain.Exceptions;
 using Shop.Infrastructure.Persistence;
 
 namespace Shop.Infrastructure.Repositories;
 
-public class CategoryRepository(AppDbContext context) : Repository<Category>(context), ICategoryRepository
+public class CategoryRepository(AppDbContext dbContext) : Repository<Category>(dbContext), ICategoryRepository
 {
-    public async Task EnsureExistsAsync(int id, CancellationToken ct = default)
+    public Task<List<Category>> GetAllAsync(CancellationToken cancellationToken) =>
+        DbContext.Set<Category>()
+            .AsNoTracking()
+            .OrderBy(c => c.Id)
+            .ToListAsync(cancellationToken);
+
+    public async Task EnsureExistsAsync(int id, CancellationToken cancellationToken)
     {
-        if (!await Context.Categories.AnyAsync(c => c.Id == id, ct))
-            throw new BadRequestException($"Category {id} does not exist.");
+        var exists = await ExistsByIdAsync(id, cancellationToken);
+
+        if (!exists)
+            throw new NotFoundException($"Category {id} not found.");
     }
 
-    public Task<bool> NameExistsAsync(string name, CancellationToken ct = default) =>
-        Context.Categories.AnyAsync(c => c.Name == name, ct);
+    public Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken) =>
+        DbContext.Set<Category>().AnyAsync(c => c.Name == name, cancellationToken);
 }
