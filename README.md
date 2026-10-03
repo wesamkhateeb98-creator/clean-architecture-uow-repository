@@ -17,6 +17,7 @@ flowchart LR
 | 2 | [Unit of Work](docs/02-unit-of-work.md) | Many repository changes, **one commit**. |
 | 3 | [Clean Architecture](docs/03-clean-architecture.md) | Dependencies point **inward**. The core knows no DB or framework. |
 | 4 | [Putting It Together](docs/04-putting-it-together.md) | One HTTP request traced through every layer. |
+| 5 | [Error Handling](docs/05-error-handling.md) | Throw Domain exceptions anywhere; **one middleware** maps them to HTTP. |
 
 Each doc: **Definition → Example → Benefits → Anti-patterns**.
 

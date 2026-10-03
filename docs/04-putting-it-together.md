@@ -54,7 +54,7 @@ flowchart LR
     MW -->|"Type = Failed Precondition"| R400["400"]
     MW -->|"anything else"| R500["500 (logged)"]
 ```
-Domain exceptions describe themselves through `GetProblemDetails()`. Only Presentation turns them into status codes.
+Domain exceptions describe themselves through `GetProblemDetails()`. Only Presentation turns them into status codes. Full walkthrough: [5. Error Handling](05-error-handling.md).
 
 ```json
 { "status": 404, "title": "Category 99 not found.", "type": "Not Found", "detail": null, "extensions": {} }
@@ -90,4 +90,4 @@ Shop.Demo/
 ```
 
 ---
-[← 3. Clean Architecture](03-clean-architecture.md) · [Back to README](../README.md)
+[← 3. Clean Architecture](03-clean-architecture.md) · [Next: 5. Error Handling →](05-error-handling.md)
