@@ -59,8 +59,10 @@ public class CategoryService(IUnitOfWork unitOfWork)
                 throw new BadRequestException(
                     $"Category {id} has {products.Count} products. Pass ?moveTo=<categoryId> to move them first.");
 
-            if (moveProductsTo == id || !await unitOfWork.Categories.ExistsAsync(moveProductsTo.Value, ct))
-                throw new BadRequestException($"Target category {moveProductsTo} is invalid.");
+            if (moveProductsTo == id)
+                throw new BadRequestException("Cannot move products to the category being deleted.");
+
+            await unitOfWork.Categories.EnsureExistsAsync(moveProductsTo.Value, ct);
 
             foreach (var product in products)
                 product.CategoryId = moveProductsTo.Value;      // change #1 (Products repository)

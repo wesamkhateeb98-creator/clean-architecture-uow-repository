@@ -4,6 +4,7 @@ namespace Shop.Application.Interfaces;
 
 public interface ICategoryRepository : IRepository<Category>
 {
-    Task<bool> ExistsAsync(int id, CancellationToken ct = default);
+    // Throws BadRequestException when the category does not exist.
+    Task EnsureExistsAsync(int id, CancellationToken ct = default);
     Task<bool> NameExistsAsync(string name, CancellationToken ct = default);
 }

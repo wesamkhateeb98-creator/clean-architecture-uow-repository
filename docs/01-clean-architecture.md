@@ -54,7 +54,7 @@ public class ProductService(IUnitOfWork unitOfWork)
 {
     public async Task<int> CreateAsync(CreateProductRequest request, CancellationToken ct)
     {
-        await EnsureCategoryExistsAsync(request.CategoryId, ct);
+        await unitOfWork.Categories.EnsureExistsAsync(request.CategoryId, ct);
 
         var product = new Product { Name = request.Name, Price = request.Price, ... };
 

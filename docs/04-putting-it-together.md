@@ -17,10 +17,10 @@ sequenceDiagram
     Client->>MW: POST /api/products
     MW->>Ctrl: next()
     Ctrl->>Svc: CreateAsync(request)
-    Svc->>UoW: Categories.ExistsAsync(1)
-    UoW->>Repo: ExistsAsync(1)
+    Svc->>UoW: Categories.EnsureExistsAsync(1)
+    UoW->>Repo: EnsureExistsAsync(1)
     Repo->>DB: SELECT EXISTS(...)
-    DB-->>Svc: true
+    DB-->>Repo: true (false → throw BadRequestException)
     Svc->>Svc: new Product { ... }
     Svc->>UoW: Products.AddAsync(product)
     Note over UoW: tracked, not saved

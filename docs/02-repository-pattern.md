@@ -29,7 +29,7 @@ classDiagram
     }
     class ICategoryRepository {
         <<interface>>
-        ExistsAsync(id)
+        EnsureExistsAsync(id)
         NameExistsAsync(name)
     }
     IRepository~T~ <|-- IProductRepository
@@ -90,6 +90,7 @@ var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct);
 |---|---|
 | Queries in one place | `Include(p => p.Category)` is written once, in `ProductRepository`, not in every service. |
 | Readable services | `Categories.NameExistsAsync("Books")` reads like business language. |
+| Reusable checks | `Categories.EnsureExistsAsync(id)` is used by `ProductService` (create/update) and `CategoryService` (delete + move). The rule is written once. |
 | Easy to mock | Tests replace `IProductRepository` with an in-memory list. |
 | Storage hidden | Moving products to Dapper or raw SQL changes only `ProductRepository`. |
 | Less duplication | `Repository<T>` gives every entity CRUD for free. `CategoryRepository` adds just 2 methods. |

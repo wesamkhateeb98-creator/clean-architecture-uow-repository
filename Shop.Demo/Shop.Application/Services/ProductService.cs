@@ -24,7 +24,7 @@ public class ProductService(IUnitOfWork unitOfWork)
 
     public async Task<int> CreateAsync(CreateProductRequest request, CancellationToken ct)
     {
-        await EnsureCategoryExistsAsync(request.CategoryId, ct);
+        await unitOfWork.Categories.EnsureExistsAsync(request.CategoryId, ct);
 
         var product = new Product
         {
@@ -45,7 +45,7 @@ public class ProductService(IUnitOfWork unitOfWork)
         var product = await unitOfWork.Products.GetByIdAsync(id, ct)
             ?? throw new NotFoundException($"Product {id} not found.");
 
-        await EnsureCategoryExistsAsync(request.CategoryId, ct);
+        await unitOfWork.Categories.EnsureExistsAsync(request.CategoryId, ct);
 
         product.Name = request.Name;
         product.Price = request.Price;
@@ -62,12 +62,6 @@ public class ProductService(IUnitOfWork unitOfWork)
 
         unitOfWork.Products.Remove(product);
         await unitOfWork.SaveChangesAsync(ct);
-    }
-
-    private async Task EnsureCategoryExistsAsync(int categoryId, CancellationToken ct)
-    {
-        if (!await unitOfWork.Categories.ExistsAsync(categoryId, ct))
-            throw new BadRequestException($"Category {categoryId} does not exist.");
     }
 
     private static ProductDto ToDto(Product p) =>
