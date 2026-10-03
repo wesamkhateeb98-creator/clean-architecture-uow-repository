@@ -80,12 +80,12 @@ public interface ICategoryRepository : IRepository<Category>
 ```mermaid
 flowchart LR
     subgraph App["Shop.Application (contracts)"]
-        IR["IRepository&lt;T&gt;"]
+        IR["IRepository#60;T#62;"]
         IPR[IProductRepository]
         ICR[ICategoryRepository]
     end
     subgraph Infra["Shop.Infrastructure (EF Core)"]
-        R["Repository&lt;T&gt;<br/>CRUD for every entity"]
+        R["Repository#60;T#62;<br/>CRUD for every entity"]
         PR["ProductRepository<br/>+ Include / filter queries"]
         CR["CategoryRepository<br/>+ EnsureExists / NameExists"]
     end
