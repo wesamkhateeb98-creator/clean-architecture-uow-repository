@@ -18,7 +18,7 @@ flowchart LR
 | 3 | [Clean Architecture](docs/03-clean-architecture.md) | Dependencies point **inward**. The core knows no DB or framework. |
 | 4 | [Putting It Together](docs/04-putting-it-together.md) | One HTTP request traced through every layer. |
 
-Each doc: **Definition → Example → Benefits**.
+Each doc: **Definition → Example → Benefits → Anti-patterns**.
 
 ## Shop.Demo features
 | Endpoint | What it shows |

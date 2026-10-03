@@ -203,5 +203,70 @@ var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct);
 | Storage hidden | Moving products to Dapper or raw SQL changes only `ProductRepository`. |
 | Less duplication | `Repository<T>` gives every entity CRUD for free. `CategoryRepository` adds just 2 methods. |
 
+## Anti-patterns
+
+| # | Anti-pattern | Symptom in Shop.Demo terms |
+|---|---|---|
+| 1 | `SaveChanges` inside the repository | Category delete commits halfway |
+| 2 | Returning `IQueryable<T>` | EF Core queries leak into every service |
+| 3 | `GetAll()` then filter in memory | 1,000,000 rows loaded to find 3 |
+| 4 | Business rules inside the repository | Pricing logic hidden in data access |
+| 5 | Repository that just mirrors `DbSet` | A useless extra layer |
+
+### 1. `SaveChanges` inside the repository
+```csharp
+// ❌ Each repository commits on its own
+public async Task AddAsync(Product p) { Context.Add(p); await Context.SaveChangesAsync(); }
+
+// CategoryService.DeleteAsync:
+await products.UpdateAsync(...);   // COMMIT #1, products moved
+await categories.RemoveAsync(...); // throws → category NOT deleted → DB is half-done
+```
+```csharp
+// ✅ Repository only stages; the Unit of Work commits once
+public async Task AddAsync(T entity, CancellationToken ct = default) =>
+    await Context.Set<T>().AddAsync(entity, ct);
+```
+
+### 2. Returning `IQueryable<T>`
+```csharp
+// ❌ The service now writes EF Core queries, so the repository hides nothing
+IQueryable<Product> Query();
+var list = await repo.Query().Include(p => p.Category).Where(p => p.Stock > 0).ToListAsync();
+```
+```csharp
+// ✅ A named method; the query stays inside Infrastructure
+Task<List<Product>> GetAllWithCategoryAsync(CancellationToken ct = default);
+```
+
+### 3. `GetAll()` then filter in memory
+```csharp
+// ❌ SELECT * FROM "Products", with every row sent over the network
+var products = (await unitOfWork.Products.GetAllAsync(ct)).Where(p => p.CategoryId == id).ToList();
+```
+```csharp
+// ✅ SELECT … WHERE "CategoryId" = @id, with filtering done in PostgreSQL
+var products = await unitOfWork.Products.GetByCategoryAsync(id, ct);
+```
+| Products in table | ❌ rows transferred | ✅ rows transferred |
+|---|---|---|
+| 1,000 | 1,000 | 3 |
+| 1,000,000 | 1,000,000 | 3 |
+
+### 4. Business rules inside the repository
+```csharp
+// ❌ "10% discount for Electronics" is a business rule, not data access
+public Task<List<Product>> GetDiscountedAsync() =>
+    Context.Products.Select(p => new Product { Price = p.CategoryId == 1 ? p.Price * 0.9m : p.Price }).ToListAsync();
+```
+✅ The repository **fetches**; `ProductService` **decides**. Rules belong in Application or Domain.
+
+### 5. Repository that just mirrors `DbSet`
+```csharp
+// ❌ Adds nothing: same method names, no named queries, no hiding
+public interface IProductRepository { IQueryable<Product> All { get; } void Add(Product p); }
+```
+✅ Add a repository only when it gives **named queries** (`GetByCategoryAsync`) or **reusable checks** (`EnsureExistsAsync`). Otherwise it's ceremony.
+
 ---
 [Next: 2. Unit of Work →](02-unit-of-work.md)
