@@ -1,4 +1,4 @@
-# 3. Unit of Work
+# 2. Unit of Work
 
 ## Definition
 A **Unit of Work** tracks every change made through the repositories during one business operation and **commits them all at once, in one transaction**.
@@ -91,3 +91,6 @@ sequenceDiagram
 | Same DbContext everywhere | `Products` and `Categories` see each other's tracked changes. |
 | Fewer round-trips | 3 SQL statements sent in one batch on save. |
 | Explicit commit point | `SaveChangesAsync` shows exactly where data hits the DB. Repositories never save on their own. |
+
+---
+[← 1. Repository Pattern](01-repository-pattern.md) · [Next: 3. Clean Architecture →](03-clean-architecture.md)

@@ -71,3 +71,6 @@ Shop.Demo/
     ├── Program.cs
     └── Shop.Api.http                   ready-to-run requests
 ```
+
+---
+[← 3. Clean Architecture](03-clean-architecture.md) · [Back to README](../README.md)

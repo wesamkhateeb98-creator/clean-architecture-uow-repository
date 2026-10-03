@@ -1,4 +1,4 @@
-# 2. Repository Pattern
+# 1. Repository Pattern
 
 ## Definition
 A **repository** acts like an **in-memory collection of entities** (`Add`, `Remove`, `GetById`) and hides *how* data is stored.
@@ -170,7 +170,7 @@ public class CategoryRepository(AppDbContext context) : Repository<Category>(con
 | `Products.AddAsync(p)` | `INSERT INTO "Products" …` | **on `SaveChangesAsync`** |
 | `Categories.Remove(c)` | `DELETE FROM "Categories" WHERE "Id" = …` | **on `SaveChangesAsync`** |
 
-Reads run right away. Writes are only **staged**, and the [Unit of Work](03-unit-of-work.md) commits them.
+Reads run right away. Writes are only **staged**, and the [Unit of Work](02-unit-of-work.md) commits them.
 
 ### Where they get created
 Repositories are **not** registered in DI. `UnitOfWork` creates them over its own `DbContext`, so they all share it:
@@ -202,3 +202,6 @@ var p = await unitOfWork.Products.GetByIdWithCategoryAsync(id, ct);
 | Easy to mock | Tests replace `IProductRepository` with an in-memory list. |
 | Storage hidden | Moving products to Dapper or raw SQL changes only `ProductRepository`. |
 | Less duplication | `Repository<T>` gives every entity CRUD for free. `CategoryRepository` adds just 2 methods. |
+
+---
+[Next: 2. Unit of Work →](02-unit-of-work.md)

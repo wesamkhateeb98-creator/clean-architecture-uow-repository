@@ -13,9 +13,9 @@ flowchart LR
 ## Read in order
 | # | Doc | One-line idea |
 |---|---|---|
-| 1 | [Clean Architecture](docs/01-clean-architecture.md) | Dependencies point **inward**. The core knows no DB or framework. |
-| 2 | [Repository Pattern](docs/02-repository-pattern.md) | Data access looks like a **collection**. Queries live in one place. |
-| 3 | [Unit of Work](docs/03-unit-of-work.md) | Many repository changes, **one commit**. |
+| 1 | [Repository Pattern](docs/01-repository-pattern.md) | Data access looks like a **collection**. Queries live in one place. |
+| 2 | [Unit of Work](docs/02-unit-of-work.md) | Many repository changes, **one commit**. |
+| 3 | [Clean Architecture](docs/03-clean-architecture.md) | Dependencies point **inward**. The core knows no DB or framework. |
 | 4 | [Putting It Together](docs/04-putting-it-together.md) | One HTTP request traced through every layer. |
 
 Each doc: **Definition → Example → Benefits**.

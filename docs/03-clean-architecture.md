@@ -1,4 +1,4 @@
-# 1. Clean Architecture
+# 3. Clean Architecture
 
 ## Definition
 Organize the app into **layers (rings)** where **dependencies point inward only**.
@@ -86,3 +86,6 @@ If Application tries to use `AppDbContext`, it **fails to compile**.
 | Thin controllers | `ProductsController` is 5 one-line actions. All rules live in services. |
 | Clear place for everything | New rule → Application. New table → Domain + Infrastructure. New endpoint → Api. |
 | Framework independence | Domain entities are plain C# classes, so they survive any framework upgrade. |
+
+---
+[← 2. Unit of Work](02-unit-of-work.md) · [Next: 4. Putting It Together →](04-putting-it-together.md)
