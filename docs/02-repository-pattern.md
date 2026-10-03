@@ -58,7 +58,70 @@ public interface IRepository<T> where T : class
 }
 ```
 
-**Implementation** (`Shop.Infrastructure/Repositories/ProductRepository.cs`):
+**Specific contracts** (`Shop.Application/Interfaces/`):
+```csharp
+public interface IProductRepository : IRepository<Product>
+{
+    Task<List<Product>> GetAllWithCategoryAsync(CancellationToken ct = default);
+    Task<Product?> GetByIdWithCategoryAsync(int id, CancellationToken ct = default);
+    Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken ct = default);
+}
+
+public interface ICategoryRepository : IRepository<Category>
+{
+    // Throws BadRequestException when the category does not exist.
+    Task EnsureExistsAsync(int id, CancellationToken ct = default);
+    Task<bool> NameExistsAsync(string name, CancellationToken ct = default);
+}
+```
+
+### Implementation
+
+```mermaid
+flowchart LR
+    subgraph App["Shop.Application (contracts)"]
+        IR["IRepository&lt;T&gt;"]
+        IPR[IProductRepository]
+        ICR[ICategoryRepository]
+    end
+    subgraph Infra["Shop.Infrastructure (EF Core)"]
+        R["Repository&lt;T&gt;<br/>CRUD for every entity"]
+        PR["ProductRepository<br/>+ Include / filter queries"]
+        CR["CategoryRepository<br/>+ EnsureExists / NameExists"]
+    end
+    R -. implements .-> IR
+    PR -- inherits --> R
+    CR -- inherits --> R
+    PR -. implements .-> IPR
+    CR -. implements .-> ICR
+    R --> Ctx[(AppDbContext)]
+```
+
+**1. Generic base** (`Shop.Infrastructure/Repositories/Repository.cs`): written once, reused by every entity.
+```csharp
+public class Repository<T>(AppDbContext context) : IRepository<T> where T : class
+{
+    protected readonly AppDbContext Context = context;
+
+    // Tracked: the caller may modify it, then the Unit of Work saves it.
+    public async Task<T?> GetByIdAsync(int id, CancellationToken ct = default) =>
+        await Context.Set<T>().FindAsync([id], ct);
+
+    // Read-only list: AsNoTracking is faster, with no change tracking.
+    public Task<List<T>> GetAllAsync(CancellationToken ct = default) =>
+        Context.Set<T>().AsNoTracking().ToListAsync(ct);
+
+    // Only stages the INSERT. Nothing is written until SaveChangesAsync.
+    public async Task AddAsync(T entity, CancellationToken ct = default) =>
+        await Context.Set<T>().AddAsync(entity, ct);
+
+    // Only stages the DELETE.
+    public void Remove(T entity) =>
+        Context.Set<T>().Remove(entity);
+}
+```
+
+**2. Product repository** (`Shop.Infrastructure/Repositories/ProductRepository.cs`): inherits CRUD and adds product-only queries.
 ```csharp
 public class ProductRepository(AppDbContext context) : Repository<Product>(context), IProductRepository
 {
@@ -68,7 +131,52 @@ public class ProductRepository(AppDbContext context) : Repository<Product>(conte
             .Include(p => p.Category)
             .OrderBy(p => p.Id)
             .ToListAsync(ct);
+
+    public Task<Product?> GetByIdWithCategoryAsync(int id, CancellationToken ct = default) =>
+        Context.Products
+            .AsNoTracking()
+            .Include(p => p.Category)
+            .FirstOrDefaultAsync(p => p.Id == id, ct);
+
+    // Tracked on purpose: the caller modifies these products and the Unit of Work saves them.
+    public Task<List<Product>> GetByCategoryAsync(int categoryId, CancellationToken ct = default) =>
+        Context.Products
+            .Where(p => p.CategoryId == categoryId)
+            .ToListAsync(ct);
 }
+```
+
+**3. Category repository** (`Shop.Infrastructure/Repositories/CategoryRepository.cs`): inherits CRUD and adds category checks.
+```csharp
+public class CategoryRepository(AppDbContext context) : Repository<Category>(context), ICategoryRepository
+{
+    public async Task EnsureExistsAsync(int id, CancellationToken ct = default)
+    {
+        if (!await Context.Categories.AnyAsync(c => c.Id == id, ct))
+            throw new BadRequestException($"Category {id} does not exist.");
+    }
+
+    public Task<bool> NameExistsAsync(string name, CancellationToken ct = default) =>
+        Context.Categories.AnyAsync(c => c.Name == name, ct);
+}
+```
+
+### What each method sends to PostgreSQL
+| Call | SQL | Hits the DB |
+|---|---|---|
+| `Products.GetAllWithCategoryAsync()` | `SELECT p.*, c.* FROM "Products" p INNER JOIN "Categories" c … ORDER BY p."Id"` | immediately |
+| `Products.GetByIdAsync(1)` | `SELECT … WHERE "Id" = 1 LIMIT 1` (skipped if already tracked) | immediately |
+| `Categories.EnsureExistsAsync(1)` | `SELECT EXISTS (SELECT 1 FROM "Categories" WHERE "Id" = 1)` | immediately |
+| `Products.AddAsync(p)` | `INSERT INTO "Products" …` | **on `SaveChangesAsync`** |
+| `Categories.Remove(c)` | `DELETE FROM "Categories" WHERE "Id" = …` | **on `SaveChangesAsync`** |
+
+Reads run right away. Writes are only **staged**, and the [Unit of Work](03-unit-of-work.md) commits them.
+
+### Where they get created
+Repositories are **not** registered in DI. `UnitOfWork` creates them over its own `DbContext`, so they all share it:
+```csharp
+public IProductRepository Products => _products ??= new ProductRepository(context);
+public ICategoryRepository Categories => _categories ??= new CategoryRepository(context);
 ```
 
 **Usage** (service, with no EF Core in sight):
